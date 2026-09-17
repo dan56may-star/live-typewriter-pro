@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Typewriter Screen Pro</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+            montserrat: ['Montserrat', 'sans-serif'],
+            bebas: ['"Bebas Neue"', 'sans-serif'],
+            playfair: ['"Playfair Display"', 'serif'],
+            jetbrains: ['"JetBrains Mono"', 'monospace'],
+            courier: ['"Courier Prime"', 'monospace']
+          },
+          animation: {
+            'cursor-blink': 'blink 1.05s infinite'
+          },
+          keyframes: {
+            blink: {
+              '0%, 49%': { opacity: '1' },
+              '50%, 100%': { opacity: '0' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Hardware acceleration for ultra-smooth rendering */
+    * {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    #app-container, #export-frame {
+      transition: background-color 0.25s ease, color 0.25s ease, aspect-ratio 0.3s ease, border-radius 0.3s ease, box-shadow 0.3s ease;
+      will-change: background-color, transform, width, height;
+      transform: translateZ(0);
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(150, 150, 150, 0.25);
+      border-radius: 9999px;
+    }
+    input[type="color"] {
+      -webkit-appearance: none;
+      border: none;
+      width: 100%;
+      height: 100%;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      background: transparent;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch {
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 0.5rem;
+    }
+    body.clean-mode .hide-on-clean {
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transition: opacity 0.3s ease;
+    }
+    body.clean-mode, body.clean-mode * {
+      cursor: none !important;
+    }
+    /* Constrained Frame Styles */
+    .frame-constrained {
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      border-radius: 1.5rem;
+      overflow: hidden;
+      transform: translateZ(0); /* GPU Layer */
+    }
+  </style>
+</head>
+<body class="h-full select-none overflow-hidden font-inter antialiased bg-[#fdfdfd] text-[#111111]" id="body">
+
+  <!-- Main Fullscreen Screen Wrapper -->
+  <div id="app-container" class="relative w-full h-full min-h-screen flex flex-col justify-between p-6 md:p-8 overflow-hidden bg-[#fdfdfd]">
+
+    <!-- TOP HEADER -->
+    <header class="hide-on-clean flex items-center justify-between z-20 transition-all duration-300">
+      <div class="flex items-center gap-2 group cursor-pointer" title="macOS window controls">
+        <div class="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e]/40 shadow-sm transition-transform duration-150 hover:scale-110"></div>
+        <div class="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123]/40 shadow-sm transition-transform duration-150 hover:scale-110"></div>
+        <div class="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29]/40 shadow-sm transition-transform duration-150 hover:scale-110"></div>
+        <span class="ml-3 text-[11px] font-mono tracking-wider opacity-35 uppercase hidden sm:inline-block text-black dark:text-white">session / rec</span>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 text-black dark:text-white">
+        <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 opacity-70">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="char-counter">0 симв.</span>
+          <span class="opacity-30">•</span>
+          <span id="word-counter">0 слов</span>
+        </div>
+
+        <button id="btn-toggle-clean" class="p-2 sm:px-3 sm:py-1.5 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm" title="Скрыть интерфейс (H)">
+          <i data-lucide="eye" class="w-3.5 h-3.5 opacity-70"></i>
+          <span class="hidden sm:inline opacity-75">Режим записи (H)</span>
+        </button>
+
+        <button id="btn-fullscreen" class="p-2 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 transition-all shadow-sm" title="Полноэкранный режим (F)">
+          <i data-lucide="maximize" class="w-4 h-4 opacity-70"></i>
+        </button>
+
+        <button id="btn-settings-toggle" class="p-2 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 transition-all shadow-sm hover:rotate-45" title="Настройки">
+          <i data-lucide="settings" class="w-4 h-4 opacity-70"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- CENTER DISPLAY -->
+    <main id="click-canvas" class="flex-1 flex flex-col items-center justify-center relative cursor-text py-4 z-10 w-full h-full">
+      <!-- EXPORT FRAME (Handles Aspect Ratio) -->
+      <div id="export-frame" class="w-full h-full flex flex-col items-center justify-center relative transition-all duration-300">
+        <div class="max-w-5xl mx-auto w-full px-8 text-center flex flex-col items-center justify-center">
+          <div class="relative inline-block w-full" style="word-break: break-word; overflow-wrap: break-word;">
+            <span id="center-text-content" class="transition-all select-none">ищу ответы там, где их нет</span>
+            <span id="center-cursor" class="inline-block w-[3px] md:w-[4px] h-[0.9em] bg-current align-middle ml-1 rounded-sm animate-cursor-blink"></span>
+          </div>
+          <div id="empty-placeholder-hint" class="hidden mt-3 text-sm font-sans tracking-wide opacity-30 select-none animate-pulse">
+            (начните печатать...)
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- BOTTOM SECTION -->
+    <footer class="hide-on-clean w-full flex flex-col items-center z-20 pb-2 transition-all duration-300">
+      
+      <!-- Input Box -->
+      <div class="w-full max-w-xl px-2 mb-4">
+        <form id="input-form" onsubmit="event.preventDefault();" class="relative flex items-center group">
+          <div class="absolute left-4 flex items-center pointer-events-none opacity-40 text-black dark:text-white">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </div>
+
+          <input 
+            type="text" 
+            id="text-input" 
+            autocomplete="off" 
+            spellcheck="false" 
+            value="ищу ответы там, где их нет"
+            placeholder="Введи фразу и нажми Enter или пиши дальше..."
+            class="w-full pl-11 pr-24 py-3.5 sm:py-4 rounded-full text-[14px] sm:text-[15px] font-sans transition-all duration-200 outline-none shadow-sm focus:shadow-md bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 focus:bg-black/10 dark:focus:bg-white/20 backdrop-blur-md border border-black/10 dark:border-white/10 text-black dark:text-white placeholder:text-black/40 dark:placeholder:text-white/50"
+          />
+
+          <div class="absolute right-2 flex items-center gap-1.5">
+            <button type="button" id="btn-clear-input" class="p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/20 opacity-60 hover:opacity-100 transition-all text-black dark:text-white">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+            <button type="button" id="btn-submit" class="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[11px] font-mono font-medium shadow-sm hover:scale-105 active:scale-95 transition-all">
+              <span class="opacity-70 text-[10px] hidden sm:inline">↵</span>
+              <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Action Footnote Buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-3 text-center">
+        <button id="btn-screenshot-badge" class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-medium tracking-wide bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 text-black dark:text-white transition-all shadow-xs backdrop-blur-md">
+          <i data-lucide="camera" class="w-3.5 h-3.5 opacity-80"></i>
+          <span>Скрыть для скрина (3с)</span>
+        </button>
+
+        <button id="btn-download-png" class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-medium tracking-wide bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-700 dark:text-emerald-100 transition-all shadow-xs backdrop-blur-md">
+          <i data-lucide="download" class="w-3.5 h-3.5 opacity-80"></i>
+          <span>Скачать PNG</span>
+        </button>
+      </div>
+      <p class="text-[10px] sm:text-[11px] font-mono uppercase tracking-widest text-black/40 dark:text-white/40 select-none mt-3">
+          НАЖМИ 'H' ЧТОБЫ СКРЫТЬ ИНТЕРФЕЙС • ENTER ОЧИСТИТЬ • КЛИК В ЛЮБОЕ МЕСТО
+      </p>
+    </footer>
+
+    <!-- Clean Mode Notification Banner -->
+    <div id="clean-mode-toast" class="fixed top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-black/85 text-white backdrop-blur text-xs font-mono shadow-xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+      <span>Интерфейс скрыт (Нажмите 'H' или Esc)</span>
+    </div>
+
+  </div>
+
+
+  <!-- SETTINGS DRAWER -->
+  <aside id="settings-drawer" class="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white/95 dark:bg-[#18181b]/95 backdrop-blur-xl border-l border-black/10 dark:border-white/10 shadow-2xl z-40 transform translate-x-full transition-transform duration-300 ease-out flex flex-col">
+    <div class="p-5 border-b border-black/10 dark:border-white/10 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="p-2 rounded-lg bg-black/[0.05] dark:bg-white/[0.08]">
+          <i data-lucide="sliders" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h2 class="text-sm font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">Настройки</h2>
+          <p class="text-[11px] text-neutral-500 font-mono">Сохраняются автоматически</p>
+        </div>
+      </div>
+      <button id="btn-close-settings" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="flex-1 overflow-y-auto custom-scroll p-5 space-y-6 text-neutral-800 dark:text-neutral-200 text-xs">
+
+      <!-- Формат / Соотношение сторон -->
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider font-mono text-neutral-500 dark:text-neutral-400 mb-2">Формат холста (Aspect Ratio)</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button data-ratio="free" class="btn-ratio-select py-2 border rounded-lg flex flex-col items-center justify-center gap-1 transition-all">
+            <i data-lucide="maximize" class="w-4 h-4"></i>
+            <span class="text-[10px] font-semibold">Free (Экран)</span>
+          </button>
+          <button data-ratio="9/16" class="btn-ratio-select py-2 border rounded-lg flex flex-col items-center justify-center gap-1 transition-all">
+            <i data-lucide="smartphone" class="w-4 h-4"></i>
+            <span class="text-[10px] font-semibold">9:16 (TikTok)</span>
+          </button>
+          <button data-ratio="1/1" class="btn-ratio-select py-2 border rounded-lg flex flex-col items-center justify-center gap-1 transition-all">
+            <i data-lucide="square" class="w-4 h-4"></i>
+            <span class="text-[10px] font-semibold">1:1 (Post)</span>
+          </button>
+          <button data-ratio="16/9" class="btn-ratio-select py-2 border rounded-lg flex flex-col items-center justify-center gap-1 transition-all">
+            <i data-lucide="monitor" class="w-4 h-4"></i>
+            <span class="text-[10px] font-semibold">16:9 (YouTube)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Звук печатной машинки -->
+      <div class="p-3 bg-neutral-100 dark:bg-neutral-800/50 rounded-xl space-y-3 border border-neutral-200 dark:border-neutral-700">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="keyboard" class="w-4 h-4 text-neutral-500"></i>
+            <span class="font-semibold text-[11px] uppercase tracking-wider font-mono">Звук клавиатуры</span>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="toggle-sound" class="sr-only peer">
+            <div class="w-9 h-5 bg-neutral-300 peer-focus:outline-none rounded-full peer dark:bg-neutral-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500"></div>
+          </label>
+        </div>
+        <div id="volume-control-wrapper" class="opacity-50 pointer-events-none transition-opacity pt-1">
+          <div class="flex justify-between text-[10px] font-mono text-neutral-500 mb-1">
+            <span>Громкость щелчков</span>
+            <span id="volume-val">50%</span>
+          </div>
+          <input type="range" id="range-volume" min="0" max="100" value="50" class="w-full h-1.5 bg-neutral-200 dark:bg-neutral-600 rounded-lg appearance-none cursor-pointer accent-black dark:accent-white" />
+        </div>
+      </div>
+
+      <!-- Пресеты цвета фона -->
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider font-mono text-neutral-500 dark:text-neutral-400 mb-2">Цвет фона</label>
+        <div class="grid grid-cols-5 gap-2 mb-3">
+          <button data-bg="#fdfdfd" class="btn-preset-bg h-9 rounded-lg border border-neutral-300 shadow-xs bg-[#fdfdfd] hover:scale-105 transition-transform" title="Белый"></button>
+          <button data-bg="#0f0f11" class="btn-preset-bg h-9 rounded-lg border border-neutral-700 shadow-xs bg-[#0f0f11] hover:scale-105 transition-transform" title="OLED Черный"></button>
+          <button data-bg="#f4efe6" class="btn-preset-bg h-9 rounded-lg border border-neutral-300 shadow-xs bg-[#f4efe6] hover:scale-105 transition-transform" title="Винтажный"></button>
+          <button data-bg="#e8eef1" class="btn-preset-bg h-9 rounded-lg border border-neutral-300 shadow-xs bg-[#e8eef1] hover:scale-105 transition-transform" title="Светло-голубой"></button>
+          <button data-bg="#1e1e24" class="btn-preset-bg h-9 rounded-lg border border-neutral-700 shadow-xs bg-[#1e1e24] hover:scale-105 transition-transform" title="Графит"></button>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative w-8 h-8 rounded-lg overflow-hidden border border-neutral-300 dark:border-neutral-700 shadow-xs shrink-0">
+            <input type="color" id="bg-color-picker" value="#fdfdfd">
+          </div>
+          <span class="text-neutral-600 dark:text-neutral-400 font-mono text-[11px]">Пользовательский фон</span>
+        </div>
+      </div>
+
+      <!-- Цвет текста -->
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider font-mono text-neutral-500 dark:text-neutral-400 mb-2">Цвет текста</label>
+        <div class="grid grid-cols-5 gap-2 mb-3">
+          <button data-text="#111111" class="btn-preset-text h-9 rounded-lg border border-neutral-300 shadow-xs bg-[#111111] hover:scale-105 transition-transform" title="Черный"></button>
+          <button data-text="#ffffff" class="btn-preset-text h-9 rounded-lg border border-neutral-700 shadow-xs bg-[#ffffff] hover:scale-105 transition-transform" title="Белый"></button>
+          <button data-text="#3b82f6" class="btn-preset-text h-9 rounded-lg border border-neutral-300 shadow-xs bg-[#3b82f6] hover:scale-105 transition-transform" title="Accent Blue"></button>
+          <button data-text="#e11d48" class="btn-preset-text h-9 rounded-lg border border-neutral-300 shadow-xs bg-[#e11d48] hover:scale-105 transition-transform" title="Rose Accent"></button>
+          <button data-text="#10b981" class="btn-preset-text h-9 rounded-lg border border-neutral-300 shadow-xs bg-[#10b981] hover:scale-105 transition-transform" title="Emerald Accent"></button>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative w-8 h-8 rounded-lg overflow-hidden border border-neutral-300 dark:border-neutral-700 shadow-xs shrink-0">
+            <input type="color" id="text-color-picker" value="#111111">
+          </div>
+          <span class="text-neutral-600 dark:text-neutral-400 font-mono text-[11px]">Пользовательский цвет текста</span>
+        </div>
+      </div>
+
+      <!-- Выбор шрифта -->
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider font-mono text-neutral-500 dark:text-neutral-400 mb-2">Шрифт текста</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button data-font="inter" class="btn-font-select p-2 rounded-lg border text-left font-inter transition-all">Inter</button>
+          <button data-font="montserrat" class="btn-font-select p-2 rounded-lg border text-left font-montserrat transition-all">Montserrat</button>
+          <button data-font="bebas" class="btn-font-select p-2 rounded-lg border text-left font-bebas transition-all text-sm tracking-wide">BEBAS NEUE</button>
+          <button data-font="playfair" class="btn-font-select p-2 rounded-lg border text-left font-playfair italic transition-all">Playfair</button>
+          <button data-font="jetbrains" class="btn-font-select p-2 rounded-lg border text-left font-jetbrains transition-all">JetBrains Mono</button>
+          <button data-font="courier" class="btn-font-select p-2 rounded-lg border text-left font-courier transition-all">Courier Prime</button>
+        </div>
+      </div>
+
+      <!-- Typography Sliders -->
+      <div class="space-y-4">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[11px] font-mono text-neutral-500">Размер</label>
+            <span id="font-size-val" class="font-mono text-[11px] font-bold">42px</span>
+          </div>
+          <input type="range" id="range-font-size" min="20" max="120" value="42" class="w-full accent-black dark:accent-white" />
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[11px] font-mono text-neutral-500">Жирность</label>
+            <span id="font-weight-val" class="font-mono text-[11px] font-bold">500</span>
+          </div>
+          <input type="range" id="range-font-weight" min="300" max="900" step="100" value="500" class="w-full accent-black dark:accent-white" />
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[11px] font-mono text-neutral-500">Межстрочный</label>
+            <span id="line-height-val" class="font-mono text-[11px] font-bold">1.3</span>
+          </div>
+          <input type="range" id="range-line-height" min="1.0" max="2.0" step="0.05" value="1.3" class="w-full accent-black dark:accent-white" />
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[11px] font-mono text-neutral-500">Межбуквенный</label>
+            <span id="letter-spacing-val" class="font-mono text-[11px] font-bold">0px</span>
+          </div>
+          <input type="range" id="range-letter-spacing" min="-2" max="12" step="0.5" value="0" class="w-full accent-black dark:accent-white" />
+        </div>
+      </div>
+
+      <!-- Сброс -->
+      <div class="pt-4 border-t border-black/10 dark:border-white/10">
+        <button id="btn-reset-settings" class="w-full py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all font-mono text-[11px] flex justify-center gap-1.5">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Сбросить настройки
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+  <div id="settings-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-30 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+
+  <!-- APPLICATION JAVASCRIPT LOGIC -->
+  <script>
+    lucide.createIcons();
+
+    // 1. WEB AUDIO API SYNTHESIZER FOR KEYBOARD SOUNDS
+    let audioCtx;
+    function playClickSound(volumePerc) {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      const volume = volumePerc / 100;
+      if (volume <= 0) return;
+
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      // Mechanical "click" envelope (short pop)
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.015);
+
+      gainNode.gain.setValueAtTime(volume * 0.5, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.02);
+
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.02);
+    }
+
+    // Default configuration
+    const DEFAULT_CONFIG = {
+      bgColor: '#fdfdfd',
+      textColor: '#111111',
+      fontFamily: 'inter',
+      fontSize: 42,
+      fontWeight: 500,
+      lineHeight: 1.3,
+      letterSpacing: 0,
+      currentText: 'ищу ответы там, где их нет',
+      aspectRatio: 'free',
+      soundEnabled: false,
+      soundVolume: 50
+    };
+
+    let state = { ...DEFAULT_CONFIG };
+
+    function loadState() {
+      try {
+        const saved = localStorage.getItem('live_typewriter_pro_cfg');
+        if (saved) {
+          state = { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+        }
+      } catch (e) {}
+    }
+
+    let saveTimeout;
+    function saveState() {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        try {
+          localStorage.setItem('live_typewriter_pro_cfg', JSON.stringify(state));
+        } catch (e) {}
+      }, 500); // Debounce by 500ms for ultra-fast typing
+    }
+
+    const appContainer = document.getElementById('app-container');
+    const exportFrame = document.getElementById('export-frame');
+    const centerTextContent = document.getElementById('center-text-content');
+    const centerCursor = document.getElementById('center-cursor');
+    const emptyPlaceholderHint = document.getElementById('empty-placeholder-hint');
+    const textInput = document.getElementById('text-input');
+    const charCounter = document.getElementById('char-counter');
+    const wordCounter = document.getElementById('word-counter');
+    
+    const toggleSound = document.getElementById('toggle-sound');
+    const rangeVolume = document.getElementById('range-volume');
+    const volumeVal = document.getElementById('volume-val');
+    const volumeWrapper = document.getElementById('volume-control-wrapper');
+
+    const fontFamilies = {
+      inter: 'Inter, sans-serif',
+      montserrat: 'Montserrat, sans-serif',
+      bebas: '"Bebas Neue", sans-serif',
+      playfair: '"Playfair Display", serif',
+      jetbrains: '"JetBrains Mono", monospace',
+      courier: '"Courier Prime", monospace'
+    };
+
+    function isColorDark(hex) {
+      let c = hex.replace('#', '');
+      if (c.length === 3) c = c.split('').map(x => x + x).join('');
+      const r = parseInt(c.substring(0, 2), 16);
+      const g = parseInt(c.substring(2, 4), 16);
+      const b = parseInt(c.substring(4, 6), 16);
+      return ((r * 299) + (g * 587) + (b * 114)) / 1000 < 128;
+    }
+
+    function applyStyles() {
+      // Background and Aspect Ratio logic
+      if (state.aspectRatio === 'free') {
+        appContainer.style.backgroundColor = state.bgColor;
+        exportFrame.style.backgroundColor = 'transparent';
+        exportFrame.classList.remove('frame-constrained');
+        exportFrame.style.aspectRatio = 'unset';
+        exportFrame.style.maxWidth = '100%';
+        exportFrame.style.maxHeight = '100%';
+        if (isColorDark(state.bgColor)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } else {
+        // Constrained ratio (TikTok, Post, YouTube)
+        appContainer.style.backgroundColor = '#18181b'; // neutral dark outer background
+        document.documentElement.classList.add('dark'); // UI controls become dark mode
+
+        exportFrame.style.backgroundColor = state.bgColor;
+        exportFrame.classList.add('frame-constrained');
+        
+        let ratioVal = state.aspectRatio; 
+        exportFrame.style.aspectRatio = ratioVal;
+        
+        exportFrame.style.maxWidth = '100%';
+        exportFrame.style.maxHeight = 'calc(100vh - 200px)'; // leave space for UI
+      }
+      
+      document.getElementById('bg-color-picker').value = state.bgColor;
+
+      // Ratio buttons UI update
+      document.querySelectorAll('.btn-ratio-select').forEach(btn => {
+        if (btn.dataset.ratio === state.aspectRatio) {
+          btn.classList.add('border-black', 'dark:border-white', 'bg-black/5', 'dark:bg-white/10');
+          btn.classList.remove('border-neutral-200', 'dark:border-neutral-800');
+        } else {
+          btn.classList.remove('border-black', 'dark:border-white', 'bg-black/5', 'dark:bg-white/10');
+          btn.classList.add('border-neutral-200', 'dark:border-neutral-800');
+        }
+      });
+
+      // Text color
+      exportFrame.style.color = state.textColor;
+      document.getElementById('text-color-picker').value = state.textColor;
+      centerCursor.style.backgroundColor = state.textColor;
+
+      // Font Family
+      centerTextContent.style.fontFamily = fontFamilies[state.fontFamily] || fontFamilies.inter;
+      document.querySelectorAll('.btn-font-select').forEach(btn => {
+        if (btn.dataset.font === state.fontFamily) {
+          btn.classList.add('border-black/30', 'dark:border-white/40', 'bg-black/10', 'dark:bg-white/10', 'font-semibold');
+        } else {
+          btn.classList.remove('border-black/30', 'dark:border-white/40', 'bg-black/10', 'dark:bg-white/10', 'font-semibold');
+        }
+      });
+
+      // Typography
+      centerTextContent.style.fontSize = `${state.fontSize}px`;
+      document.getElementById('range-font-size').value = state.fontSize;
+      document.getElementById('font-size-val').textContent = `${state.fontSize}px`;
+
+      centerTextContent.style.fontWeight = state.fontWeight;
+      document.getElementById('range-font-weight').value = state.fontWeight;
+      document.getElementById('font-weight-val').textContent = state.fontWeight;
+
+      centerTextContent.style.lineHeight = state.lineHeight;
+      document.getElementById('range-line-height').value = state.lineHeight;
+      document.getElementById('line-height-val').textContent = state.lineHeight;
+
+      centerTextContent.style.letterSpacing = `${state.letterSpacing}px`;
+      document.getElementById('range-letter-spacing').value = state.letterSpacing;
+      document.getElementById('letter-spacing-val').textContent = `${state.letterSpacing}px`;
+
+      // Sound UI update
+      toggleSound.checked = state.soundEnabled;
+      rangeVolume.value = state.soundVolume;
+      volumeVal.textContent = `${state.soundVolume}%`;
+      if (state.soundEnabled) {
+        volumeWrapper.classList.remove('opacity-50', 'pointer-events-none');
+      } else {
+        volumeWrapper.classList.add('opacity-50', 'pointer-events-none');
+      }
+    }
+
+    function updateTextContent(text) {
+      state.currentText = text;
+      centerTextContent.textContent = text;
+      
+      const charCount = text.length;
+      // Ultra-fast word count logic without array allocations
+      const wordCount = (text.match(/\S+/g) || []).length;
+      charCounter.textContent = `${charCount} симв.`;
+      wordCounter.textContent = `${wordCount} слов`;
+
+      if (text.length === 0) {
+        emptyPlaceholderHint.classList.remove('hidden');
+        document.getElementById('btn-clear-input').style.visibility = 'hidden';
+      } else {
+        emptyPlaceholderHint.classList.add('hidden');
+        document.getElementById('btn-clear-input').style.visibility = 'visible';
+      }
+    }
+
+    function focusInput() {
+      textInput.focus();
+      const len = textInput.value.length;
+      textInput.setSelectionRange(len, len);
+    }
+
+    // Input Audio Trigger on Typing
+    let lastLength = 0;
+    textInput.addEventListener('input', (e) => {
+      updateTextContent(e.target.value);
+      saveState();
+
+      const newLength = e.target.value.length;
+      if (newLength > lastLength && state.soundEnabled) {
+        playClickSound(state.soundVolume);
+      }
+      lastLength = newLength;
+    });
+
+    // Sound settings
+    toggleSound.addEventListener('change', (e) => {
+      state.soundEnabled = e.target.checked;
+      applyStyles();
+      saveState();
+      if (state.soundEnabled) playClickSound(state.soundVolume); // Test click
+    });
+    rangeVolume.addEventListener('input', (e) => {
+      state.soundVolume = e.target.value;
+      applyStyles();
+      saveState();
+    });
+    rangeVolume.addEventListener('change', () => {
+      if (state.soundEnabled) playClickSound(state.soundVolume); // Test click
+    });
+
+    // HTML2Canvas Export
+    document.getElementById('btn-download-png').addEventListener('click', async () => {
+      // Hide cursor temporarily
+      centerCursor.style.opacity = '0';
+      
+      const targetElement = state.aspectRatio === 'free' ? appContainer : exportFrame;
+      
+      try {
+        const canvas = await html2canvas(targetElement, {
+          scale: 2, // High resolution
+          useCORS: true,
+          backgroundColor: state.aspectRatio === 'free' ? state.bgColor : null
+        });
+        
+        const link = document.createElement('a');
+        link.download = `typewriter_export_${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } catch (err) {
+        console.error("Export failed:", err);
+        alert("Ошибка при экспорте PNG.");
+      } finally {
+        // Restore cursor
+        centerCursor.style.opacity = '1';
+      }
+    });
+
+    // Clean Mode Toggle
+    let isCleanMode = false;
+    let toastTimeout = null;
+    function toggleCleanMode(forceState) {
+      isCleanMode = typeof forceState === 'boolean' ? forceState : !isCleanMode;
+      if (isCleanMode) {
+        body.classList.add('clean-mode');
+        document.getElementById('clean-mode-toast').classList.remove('opacity-0', 'pointer-events-none');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+          document.getElementById('clean-mode-toast').classList.add('opacity-0', 'pointer-events-none');
+        }, 2500);
+      } else {
+        body.classList.remove('clean-mode');
+        document.getElementById('clean-mode-toast').classList.add('opacity-0', 'pointer-events-none');
+        focusInput();
+      }
+    }
+
+    document.getElementById('btn-screenshot-badge').addEventListener('click', () => {
+      toggleCleanMode(true);
+      setTimeout(() => toggleCleanMode(false), 3000);
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      const isInputActive = document.activeElement === textInput;
+      if (e.key === 'Escape') {
+        if (isCleanMode) toggleCleanMode(false);
+        document.getElementById('settings-drawer').classList.add('translate-x-full');
+        document.getElementById('settings-backdrop').classList.add('opacity-0', 'pointer-events-none');
+        return;
+      }
+      if (!isInputActive || e.altKey || e.ctrlKey) {
+        if (e.key.toLowerCase() === 'h' || e.key.toLowerCase() === 'р') {
+          e.preventDefault();
+          toggleCleanMode();
+        } else if (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'а') {
+          e.preventDefault();
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(()=>{});
+          } else {
+            document.exitFullscreen().catch(()=>{});
+          }
+        }
+      }
+    });
+
+    // Enter Key -> Clear Input
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        textInput.value = '';
+        lastLength = 0;
+        updateTextContent('');
+        saveState();
+      }
+    });
+    document.getElementById('btn-clear-input').addEventListener('click', () => {
+      textInput.value = '';
+      lastLength = 0;
+      updateTextContent('');
+      saveState();
+      focusInput();
+    });
+    document.getElementById('btn-submit').addEventListener('click', () => {
+      textInput.value = '';
+      lastLength = 0;
+      updateTextContent('');
+      saveState();
+      focusInput();
+    });
+
+    // Settings UI Control Panels
+    document.getElementById('btn-settings-toggle').addEventListener('click', () => {
+      document.getElementById('settings-drawer').classList.remove('translate-x-full');
+      document.getElementById('settings-backdrop').classList.remove('opacity-0', 'pointer-events-none');
+    });
+    document.getElementById('btn-close-settings').addEventListener('click', () => {
+      document.getElementById('settings-drawer').classList.add('translate-x-full');
+      document.getElementById('settings-backdrop').classList.add('opacity-0', 'pointer-events-none');
+      focusInput();
+    });
+    document.getElementById('settings-backdrop').addEventListener('click', () => {
+      document.getElementById('settings-drawer').classList.add('translate-x-full');
+      document.getElementById('settings-backdrop').classList.add('opacity-0', 'pointer-events-none');
+      focusInput();
+    });
+
+    // Format (Aspect Ratio) Listeners
+    document.querySelectorAll('.btn-ratio-select').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.aspectRatio = btn.dataset.ratio;
+        applyStyles();
+        saveState();
+      });
+    });
+
+    // Background Color Listeners
+    document.querySelectorAll('.btn-preset-bg').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.bgColor = btn.dataset.bg;
+        applyStyles();
+        saveState();
+      });
+    });
+    document.getElementById('bg-color-picker').addEventListener('input', (e) => {
+      state.bgColor = e.target.value;
+      applyStyles();
+      saveState();
+    });
+
+    // Text Color Listeners
+    document.querySelectorAll('.btn-preset-text').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.textColor = btn.dataset.text;
+        applyStyles();
+        saveState();
+      });
+    });
+    document.getElementById('text-color-picker').addEventListener('input', (e) => {
+      state.textColor = e.target.value;
+      applyStyles();
+      saveState();
+    });
+
+    // Typography Listeners
+    document.querySelectorAll('.btn-font-select').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.fontFamily = btn.dataset.font;
+        applyStyles();
+        saveState();
+      });
+    });
+    document.getElementById('range-font-size').addEventListener('input', (e) => {
+      state.fontSize = Number(e.target.value);
+      applyStyles();
+      saveState();
+    });
+    document.getElementById('range-font-weight').addEventListener('input', (e) => {
+      state.fontWeight = Number(e.target.value);
+      applyStyles();
+      saveState();
+    });
+    document.getElementById('range-line-height').addEventListener('input', (e) => {
+      state.lineHeight = Number(e.target.value);
+      applyStyles();
+      saveState();
+    });
+    document.getElementById('range-letter-spacing').addEventListener('input', (e) => {
+      state.letterSpacing = Number(e.target.value);
+      applyStyles();
+      saveState();
+    });
+
+    // Reset settings
+    document.getElementById('btn-reset-settings').addEventListener('click', () => {
+      state = { ...DEFAULT_CONFIG, currentText: textInput.value };
+      applyStyles();
+      saveState();
+    });
+
+    // Auto focus input on page click (outside controls)
+    document.getElementById('app-container').addEventListener('click', (e) => {
+      if (!e.target.closest('button') && !e.target.closest('input') && !e.target.closest('#settings-drawer')) {
+        focusInput();
+      }
+    });
+
+    // INIT
+    loadState();
+    lastLength = state.currentText.length;
+    textInput.value = state.currentText;
+    updateTextContent(state.currentText);
+    applyStyles();
+    
+    window.addEventListener('load', focusInput);
+
+  </script>
+</body>
+</html>
